@@ -7,6 +7,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.*;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -19,6 +20,7 @@ public class TranslationHelper {
     public static String filepath;
     public static String project;
     public static String modId;
+    public static String languageCode;
     private static TextField fileChooser;
     public static void main(String[] args) {
         frame = new MainFrame("Stardew Valley Translation Tool");
@@ -76,6 +78,14 @@ public class TranslationHelper {
         frame.add(new Label("Opening project " + project));
         frame.revalidate();
         frame.repaint();
+
+        if (Files.notExists(Paths.get(TranslationHelper.filepath, "Mods", project))) {
+            frame.add(new Label("Project " + project + " does not exist!"));
+            frame.revalidate();
+            frame.repaint();
+            return;
+        }
+
         beginProject();
     }
     static void beginProject() {
@@ -85,7 +95,178 @@ public class TranslationHelper {
         * content.json and manifest.json are initialized
         * assets folder is made
         * */
+        final String MOD_PATH = Paths.get(filepath,"Mods",project).toString();
 
+        String contentLines = readFile(Paths.get(MOD_PATH,"content.json").toString());
+
+        JSONObject contentJSON = new JSONObject(contentLines);
+        JSONObject manifestJSON = new JSONObject(readFile(Paths.get(MOD_PATH,"manifest.json").toString()));
+        modId = manifestJSON.getString("UniqueID");
+
+        JSONObject search = contentJSON.getJSONArray("Changes").getJSONObject(0);
+        for (Object j : contentJSON.getJSONArray("Changes")) {
+            if (((JSONObject) j).getString("Target").equals("Data/AdditionalLanguages")) {
+                search = (JSONObject) j;
+            }
+        }
+
+        JSONObject entries = search.getJSONObject("Entries").getJSONObject(modId);
+        //"Entries":{"YourNameNoSpaces.LanguageName":{"LanguageCode":"la","TimeFormat":"[HOURS_24_00]:[MINUTES]","UseLatinFont":true,"ClockDateFormat":"[DAY_OF_WEEK] [DAY_OF_MONTH]","ID":"YourNameNoSpaces.LanguageName","ButtonTexture":"Mods/YourNameNoSpaces.LanguageName/Button","ClockTimeFormat":"[HOURS_24_00]:[MINUTES]"}
+
+        frame.add(new Label("Language Code"));
+        TextField lc = new TextField(entries.getString("LanguageCode"));
+        languageCode = lc.getText();
+        frame.add(lc);
+        frame.add(new Label("Time Format"));
+        TextField timeFormat = new TextField(entries.getString("TimeFormat"));
+        frame.add(timeFormat);
+        frame.add(new Label("Use Latin Font"));
+        TextField useLatinFont = new TextField(String.valueOf(entries.getBoolean("UseLatinFont")));
+        frame.add(useLatinFont);
+        frame.add(new Label("Clock Date Format"));
+        TextField clockDateFormat = new TextField(entries.getString("ClockDateFormat"));
+        frame.add(clockDateFormat);
+        frame.add(new Label("Clock Time Format"));
+        TextField clockTimeFormat = new TextField(entries.getString("ClockTimeFormat"));
+        frame.add(clockTimeFormat);
+
+        frame.add(new CustomButton("Save", (e) -> {
+            entries.put("LanguageCode",lc.getText());
+            languageCode = lc.getText();
+            entries.put("TimeFormat",timeFormat.getText());
+            entries.put("UseLatinFont",Boolean.parseBoolean(useLatinFont.getText()));
+            entries.put("ClockDateFormat",clockDateFormat.getText());
+            entries.put("ClockTimeFormat",clockTimeFormat.getText());
+            saveFile(Paths.get(MOD_PATH,"content.json").toString(),contentJSON);
+        }));
+        frame.add(new CustomButton("Continue", (e) -> {
+            frame.getContentPane().removeAll();
+            frame.add(new Label("Loading JSON files..."));
+            frame.revalidate();
+            frame.repaint();
+            loadFilesToTranslate();
+        }));
+        frame.revalidate();
+        frame.repaint();
+    }
+    static void loadFilesToTranslate() {
+        final String MOD_PATH = Paths.get(filepath,"Mods",project).toString();
+        final String LANGUAGE_CODE = languageCode.toLowerCase() + "-" + languageCode.toUpperCase();
+        String progress = "";
+        try {
+            progress = readFile(project + "_progress.json");
+        } catch (RuntimeException e) {
+            System.out.println(project + "_progress.json does not exist.");
+            frame.getContentPane().removeAll();
+            frame.add(new Label("Blank project. Copying data files from Stardew Valley."));
+            frame.revalidate();
+            frame.repaint();
+        }
+        JSONObject progressJSON = progress.isEmpty() ? new JSONObject() : new JSONObject(progress);
+        String contentPath = Paths.get(MOD_PATH, "content.json").toString();
+        JSONObject contentJSON = new JSONObject(readFile(contentPath));
+        JSONArray changes = contentJSON.getJSONArray("Changes");
+
+        if (progress.isEmpty()) {
+            //Load all JSON files from Stardew Valley into the mod
+            File baseDir = new File(Paths.get(filepath,"Content (unpacked)").toUri());
+            File assetsDir = new File(Paths.get(MOD_PATH,"assets").toUri());
+            //go through each sub directory and find all files that have translations
+            //For each file with a translation, create a copy of it in assets and add it to content.json
+
+            if (baseDir.listFiles() == null) {
+                System.out.println(baseDir.getAbsolutePath());
+                return;
+            }
+
+            for (File f: Objects.requireNonNull(baseDir.listFiles())) {
+                if (f.isDirectory()) {
+                    JSONObject progressBaseDir = new JSONObject();
+                    progressJSON.put(f.getName(), progressBaseDir);
+                    File comparableDir = new File(Paths.get(assetsDir.getAbsolutePath(),f.getName()).toUri());
+                    for (File sub: Objects.requireNonNull(f.listFiles())) {
+                        //Some two-layer-deep dirs, but no three layer
+                        if (sub.isDirectory()) {
+                            JSONObject progressSubDir = new JSONObject();
+                            progressBaseDir.put(sub.getName(),progressSubDir);
+                            for (File doubleSub : Objects.requireNonNull(sub.listFiles())) {
+                                File deepDir = new File(Paths.get(assetsDir.getAbsolutePath(),f.getName(),sub.getName()).toUri());
+                                if (doubleSub.getName().contains("de-DE")) {
+                                    progressSubDir.put(doubleSub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + doubleSub.getName().split("\\.")[2],"loaded");
+                                    //Requires translation
+                                    if (!deepDir.exists()) {
+                                        boolean success = deepDir.mkdirs();
+                                    }
+                                    copyFile(doubleSub.getAbsolutePath().split("\\.")[0] + "." + doubleSub.getAbsolutePath().split("\\.")[2], Paths.get(deepDir.getAbsolutePath(),doubleSub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + doubleSub.getName().split("\\.")[2]).toString());
+                                    JSONObject change = new JSONObject();
+                                    change.put("Action", "Load");
+                                    change.put("Target",f.getName() + "/" + sub.getName() + "/" + doubleSub.getName().split("\\.")[0]);
+                                    change.put("FromFile","assets/" + f.getName() + "/" + sub.getName() + "/" + doubleSub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + doubleSub.getName().split("\\.")[2]);
+                                    JSONObject when = new JSONObject();
+                                    when.put("Language",languageCode);
+                                    change.put("when", when);
+                                    changes.put(change);
+                                }
+                            }
+                        } else if (sub.getName().contains("de-DE")) {
+                            progressBaseDir.put(sub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + sub.getName().split("\\.")[2],"loaded");
+                            //Requires translation
+                            if (!comparableDir.exists()) {
+                                boolean success = comparableDir.mkdir();
+                            }
+                            copyFile(sub.getAbsolutePath().split("\\.")[0] + "." + sub.getAbsolutePath().split("\\.")[2], Paths.get(comparableDir.getAbsolutePath(),sub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + sub.getName().split("\\.")[2]).toString());
+                            JSONObject change = new JSONObject();
+                            change.put("Action", "Load");
+                            change.put("Target",f.getName() + "/" + sub.getName().split("\\.")[0]);
+                            change.put("FromFile","assets/" + f.getName() + "/" + sub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + sub.getName().split("\\.")[2]);
+                            JSONObject when = new JSONObject();
+                            when.put("Language",languageCode);
+                            change.put("when", when);
+                            changes.put(change);
+                        }
+                    }
+                }
+            }
+            saveFile(contentPath,contentJSON);
+            saveFile(project + "_progress.json",progressJSON);
+
+            frame.getContentPane().removeAll();
+            frame.add(new Label("Files copied successfully"));
+            frame.revalidate();
+            frame.repaint();
+        }
+
+        //JSON is now loaded. Name_progress.json is loaded. content.json is updated.
+
+    }
+    static void saveFile(String filename, JSONObject json) {
+        try {
+            FileWriter fw = new FileWriter(filename);
+            fw.write(json.toString());
+            fw.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    static String readFile(String filename) {
+        StringBuilder contentLines = new StringBuilder();
+        try {
+            File file = new File(filename);
+            List<String> lines = Files.readAllLines(file.toPath());
+            for (String s : lines) {
+                contentLines.append(s);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException();
+        }
+        return contentLines.toString();
+    }
+    static void copyFile(String source, String destination) {
+        File src = new File(source);
+        File target = new File(destination);
+        try {
+            Files.copy(src.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception err) {}
     }
     static void newProject(ActionEvent e) {
         frame.getContentPane().removeAll();
