@@ -1,0 +1,9 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="StardewValleyTranslationHelper:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/StardewValleyTranslationHelper_jar</output-path>
+    <root id="archive" name="StardewValleyTranslationHelper.jar">
+      <element id="module-output" name="StardewValleyTranslationHelper" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/json-java.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>

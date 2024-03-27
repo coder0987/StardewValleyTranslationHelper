@@ -1,3 +1,5 @@
+package com.samuelmach.translationhelper;
+
 import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
@@ -14,7 +16,6 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-
 import org.json.*;
 
 public class TranslationHelper {
