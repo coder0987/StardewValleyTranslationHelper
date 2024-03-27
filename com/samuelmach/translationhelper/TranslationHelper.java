@@ -466,83 +466,98 @@ public class TranslationHelper {
         File modDir = new File(Paths.get(filepath, "Mods", project).toUri());
         boolean made = modDir.mkdir();
         if (!made) {
-            frame.add(new Label("Failed to create project. Please try running as administrator"));
+            frame.add(new Label("Failed to create project. Checking if it already exists..."));
             frame.revalidate();
             frame.repaint();
-            return;
+            if (!modDir.exists() || !modDir.isDirectory()) {
+                frame.add(new Label(project + " could not be created or located"));
+                frame.revalidate();
+                frame.repaint();
+                return;
+            }
         }
-        try {
-            FileWriter manifest = new FileWriter(Paths.get(filepath, "Mods", project, "manifest.json").toFile());
-            manifest.write("{\n" +
-                    "\t\"Name\": \"" + project + "\",\n" +
-                    "\t\"Author\": \"" + name + "\",\n" +
-                    "\t\"Version\": \"0.0.1\",\n" +
-                    "\t\"Description\": \"Translates the base game to " + project + "\",\n" +
-                    "\t\"UniqueID\": \"" + modId + "\",\n" +
-                    "\t\"UpdateKeys\": [],\n" +
-                    "\t\"ContentPackFor\": {\n" +
-                    "\t\t\"UniqueID\": \"Pathoschild.ContentPatcher\"\n" +
-                    "\t}\n" +
-                    "}");
-            manifest.close();
-        } catch (Exception err) {
+        if (!Paths.get(filepath, "Mods", project, "manifest.json").toFile().exists()) {
+            try {
+                FileWriter manifest = new FileWriter(Paths.get(filepath, "Mods", project, "manifest.json").toFile());
+                manifest.write("{\n" +
+                        "\t\"Name\": \"" + project + "\",\n" +
+                        "\t\"Author\": \"" + name + "\",\n" +
+                        "\t\"Version\": \"0.0.1\",\n" +
+                        "\t\"Description\": \"Translates the base game to " + project + "\",\n" +
+                        "\t\"UniqueID\": \"" + modId + "\",\n" +
+                        "\t\"UpdateKeys\": [],\n" +
+                        "\t\"ContentPackFor\": {\n" +
+                        "\t\t\"UniqueID\": \"Pathoschild.ContentPatcher\"\n" +
+                        "\t}\n" +
+                        "}");
+                manifest.close();
+            } catch (Exception err) {
 
+            }
         }
+        if (!Paths.get(filepath, "Mods", project, "content.json").toFile().exists()) {
+            try {
+                FileWriter content = new FileWriter(Paths.get(filepath, "Mods", project, "content.json").toFile());
 
-        try {
-            FileWriter content = new FileWriter(Paths.get(filepath, "Mods", project, "content.json").toFile());
+                JSONObject contentJson = new JSONObject();
+                contentJson.put("Format", "1.30.0");
+                JSONArray changes = new JSONArray();
+                contentJson.put("Changes", changes);
 
-            JSONObject contentJson = new JSONObject();
-            contentJson.put("Format","1.30.0");
-            JSONArray changes = new JSONArray();
-            contentJson.put("Changes",changes);
+                JSONObject base = new JSONObject();
+                base.put("Action", "EditData");
+                base.put("Target", "Data/AdditionalLanguages");
+                JSONObject entries = new JSONObject();
+                JSONObject mainEntry = new JSONObject();
+                mainEntry.put("ID", modId);
+                mainEntry.put("LanguageCode", project.substring(0, 2).toLowerCase());//Should be changed later by user
+                mainEntry.put("ButtonTexture", "Mods/" + modId + "/Button");
+                mainEntry.put("UseLatinFont", true);
+                mainEntry.put("TimeFormat", "[HOURS_24_00]:[MINUTES]");
+                mainEntry.put("ClockTimeFormat", "[HOURS_24_00]:[MINUTES]");
+                mainEntry.put("ClockDateFormat", "[DAY_OF_WEEK] [DAY_OF_MONTH]");
+                entries.put(modId, mainEntry);
+                base.put("Entries", entries);
 
-            JSONObject base = new JSONObject();
-            base.put("Action","EditData");
-            base.put("Target","Data/AdditionalLanguages");
-            JSONObject entries = new JSONObject();
-            JSONObject mainEntry = new JSONObject();
-            mainEntry.put("ID",modId);
-            mainEntry.put("LanguageCode",project.substring(0,2).toLowerCase());//Should be changed later by user
-            mainEntry.put("ButtonTexture", "Mods/" + modId + "/Button");
-            mainEntry.put("UseLatinFont",true);
-            mainEntry.put("TimeFormat","[HOURS_24_00]:[MINUTES]");
-            mainEntry.put("ClockTimeFormat", "[HOURS_24_00]:[MINUTES]");
-            mainEntry.put("ClockDateFormat", "[DAY_OF_WEEK] [DAY_OF_MONTH]");
-            entries.put(modId, mainEntry);
-            base.put("Entries",entries);
+                changes.remove(0);
+                changes.put(base);
 
-            changes.remove(0);
-            changes.put(base);
+                JSONObject languageButton = new JSONObject();
+                languageButton.put("Action", "Load");
+                languageButton.put("Target", "Mods/" + modId + "/Button");
+                languageButton.put("FromFile", "assets/button.png");
 
-            JSONObject languageButton = new JSONObject();
-            languageButton.put("Action","Load");
-            languageButton.put("Target","Mods/" + modId + "/Button");
-            languageButton.put("FromFile","assets/button.png");
+                changes.put(languageButton);
 
-            changes.put(languageButton);
+                content.write(contentJson.toString());
 
-            content.write(contentJson.toString());
+                content.close();
+            } catch (Exception err) {
 
-            content.close();
-        } catch (Exception err) {
-
+            }
         }
 
         File assetsDir = new File(Paths.get(filepath, "Mods", project, "assets").toUri());
         boolean assetsDirMade = assetsDir.mkdir();
         if (!assetsDirMade) {
-            frame.add(new Label("Failed to create assets folder. Please try running as administrator"));
+            frame.add(new Label("Failed to create assets folder. Checking if it already exists..."));
             frame.revalidate();
             frame.repaint();
-            return;
+            if (!assetsDir.exists() || !assetsDir.isDirectory()) {
+                frame.add(new Label("/assets/ could not be created or located"));
+                frame.revalidate();
+                frame.repaint();
+                return;
+            }
         }
         File src = new File("button.png");
         File target = new File(Paths.get(filepath, "Mods", project, "assets", "button.png").toUri());
-        try {
-            Files.copy(src.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        } catch (Exception err) {}
-
+        if (!target.exists()) {
+            try {
+                Files.copy(src.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } catch (Exception err) {
+            }
+        }
         try {
             File file = new File("TranslationHelper.properties");
             List<String> lines = Files.readAllLines(file.toPath());
