@@ -2,7 +2,6 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 import java.io.*;
-import java.net.URI;
 import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
@@ -11,6 +10,7 @@ import java.nio.file.*;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.util.Locale;
 
 public class TranslationHelper {
     private static MainFrame frame;
@@ -19,11 +19,51 @@ public class TranslationHelper {
     public static void main(String[] args) {
         frame = new MainFrame("Stardew Valley Translation Tool");
 
+        if (Files.exists(Path.of("TranslationHelper.properties"))) {
+            begin();
+        } else {
+            initFirstMenu();
+        }
+
+    }
+    static void begin() {
+        BufferedReader reader;
+        try {
+            reader = new BufferedReader(new FileReader("TranslationHelper.properties"));
+            String line = reader.readLine();
+
+            String[] arr = line.split(":");
+            filepath = arr[1];
+            for (int i=2; i<arr.length; i++) {
+                filepath += ":" + arr[i];
+            }
+
+            reader.close();
+        } catch (Exception e) {
+            System.out.println("Error reading config file");
+            e.printStackTrace();
+            return;
+        }
+        Label header = new Label("Install location located: " + filepath);
+        frame.add(header);
+        frame.revalidate();
+        frame.repaint();
+    }
+    static void initFirstMenu() {
         Label header = new Label("Choose your Stardew Valley install location");
         CustomButton b = new CustomButton("Choose",TranslationHelper::chooseDirectory);
 
-        fileChooser = new TextField("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Stardew Valley");
-
+        switch (OsCheck.getOperatingSystemType()) {
+            case MacOS -> {
+                fileChooser = new TextField("/Users/[username]/Library/Application Support/Steam/steamapps/Stardew Valley");
+            }
+            case Linux -> {
+                fileChooser = new TextField("/home/[username]/.local/share/Steam/steamapps/Stardew Valley");
+            }
+            default -> {
+                fileChooser = new TextField("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Stardew Valley");
+            }
+        }
         CustomButton next = new CustomButton("Next",TranslationHelper::next);
 
         frame.add(header);
@@ -50,19 +90,7 @@ public class TranslationHelper {
 
         if (Files.notExists(Paths.get(filepath))) {
             frame.add(new Label("The chosen directory does not exist!"));
-            Label header = new Label("Choose your Stardew Valley install location");
-            CustomButton b = new CustomButton("Choose",TranslationHelper::chooseDirectory);
-
-            fileChooser = new TextField("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Stardew Valley");
-
-            CustomButton next = new CustomButton("Next",TranslationHelper::next);
-
-            frame.add(header);
-            frame.add(fileChooser);
-            frame.add(b);
-            frame.add(next);
-            frame.revalidate();
-            frame.repaint();
+            initFirstMenu();
             return;
         }
         Label currentStep = new Label("Directory exists...");
@@ -71,7 +99,7 @@ public class TranslationHelper {
         frame.repaint();
 
         //Check for Stardew Valley
-        if (Files.notExists(Paths.get(filepath + "\\Stardew Valley.exe"))) {
+        if (Files.notExists(Paths.get(filepath, "Stardew Valley.exe"))) {
             frame.getContentPane().removeAll();
             frame.add(new Label("Stardew Valley is not installed in the chosen directory. Please install Stardew Valley."));
             frame.add(new CustomButton("Close",(ae) -> System.exit(0)));
@@ -82,31 +110,189 @@ public class TranslationHelper {
         currentStep.setText("Checking for SMAPI...");
         frame.revalidate();
         frame.repaint();
-        if (Files.notExists(Paths.get(filepath + "\\smapi.exe"))) {
+        System.out.println("Install SMAPI");
+        if (Files.notExists(Paths.get(filepath, "StardewModdingAPI.exe"))) {
             currentStep.setText("SMAPI is not installed in the chosen directory. Installing...");
             frame.revalidate();
             frame.repaint();
-            Installer.installSMAPI();
+            if (!Installer.installSMAPI()) {
+                frame.getContentPane().removeAll();
+                frame.add(new Label("Failed to install SMAPI."));
+                frame.add(new CustomButton("Close",(ae) -> System.exit(0)));
+                frame.revalidate();
+                frame.repaint();
+                return;
+            }
         }
         currentStep.setText("Checking for Content Patcher...");
         frame.revalidate();
         frame.repaint();
+        System.out.println("Install Content Patcher");
+        if (Files.notExists(Paths.get(TranslationHelper.filepath, "Mods","ContentPatcher"))) {
+            currentStep.setText("Content Patcher is not installed in the chosen directory. Installing...");
+            frame.revalidate();
+            frame.repaint();
+            if (!Installer.installContentPatcher()) {
+                frame.getContentPane().removeAll();
+                frame.add(new Label("Failed to install Content Patcher."));
+                frame.add(new CustomButton("Close",(ae) -> System.exit(0)));
+                frame.revalidate();
+                frame.repaint();
+                return;
+            }
+        }
+        currentStep.setText("Checking for Stardew XNB Hack...");
+        frame.revalidate();
+        frame.repaint();
+        System.out.println("Install XNB");
+        if (Files.notExists(Paths.get(TranslationHelper.filepath, "Content (unpacked)"))) {
+            currentStep.setText("Stardew XNB Hack is not installed in the chosen directory. Installing...");
+            frame.revalidate();
+            frame.repaint();
+            if (!Installer.installXNBHack()) {
+                frame.getContentPane().removeAll();
+                frame.add(new Label("Failed to install Stardew XNB Hack."));
+                frame.add(new CustomButton("Close",(ae) -> System.exit(0)));
+                frame.revalidate();
+                frame.repaint();
+                return;
+            }
+        }
+        System.out.println("Finished XNB");
+        currentStep.setText("Basic Install complete");
+        frame.add(new Label("Go to Steam -> Stardew Valley -> Properties -> Launch Options and set to "));
+        String filetype = OsCheck.getOperatingSystemType() == OsCheck.OSType.Windows ? ".exe" : "";
+        frame.add(new Label(Paths.get(filepath,"StardewModdingAPI" + filetype) + " %command%"));
+        frame.revalidate();
+        frame.repaint();
+        try {
+            FileWriter config = new FileWriter("TranslationHelper.properties");
+            config.append("location: ").append(TranslationHelper.filepath);
+            config.close();
+            begin();
+        } catch (Exception err) {
+            //Insufficient permissions
+        }
     }
 }
 
 class Installer {
-    public static void installSMAPI() {
+    public static boolean installSMAPI() {
         try {
-            URL url = new URL("https://github.com/Pathoschild/SMAPI/releases/download/4.0.2/SMAPI-4.0.2-installer-for-developers.zip");
-            ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
-            FileOutputStream fileOutputStream = new FileOutputStream(TranslationHelper.filepath + "\\SMAPI.zip");
-            FileChannel fileChannel = fileOutputStream.getChannel();
-            fileChannel.transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
-
-            unzip(TranslationHelper.filepath + "\\SMAPI.zip",TranslationHelper.filepath + "\\smapi_install");
+            if (Files.notExists(Paths.get(TranslationHelper.filepath, "SMAPI.zip"))) {
+                URL url = new URL("https://github.com/Pathoschild/SMAPI/releases/download/4.0.2/SMAPI-4.0.2-installer-for-developers.zip");
+                ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
+                FileOutputStream fileOutputStream = new FileOutputStream(Paths.get(TranslationHelper.filepath, "SMAPI.zip").toString());
+                FileChannel fileChannel = fileOutputStream.getChannel();
+                fileChannel.transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+            }
+            if (Files.notExists(Paths.get(TranslationHelper.filepath, "smapi_install"))) {
+                unzip(Paths.get(TranslationHelper.filepath, "SMAPI.zip").toString(), Paths.get(TranslationHelper.filepath, "smapi_install").toString());
+            }
+            switch (OsCheck.getOperatingSystemType()) {
+                case MacOS -> {
+                    Runtime.
+                            getRuntime().
+                            exec("/bin/sh -c \"\" " + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI 4.0.2 installer for developers", "install on macOS.command"));
+                }
+                case Linux -> {
+                    Runtime.
+                            getRuntime().
+                            exec("/bin/sh -c \"\" " + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI 4.0.2 installer for developers", "install on Linux.sh"));
+                }
+                case Windows -> {
+                    Runtime.
+                            getRuntime().
+                            exec("cmd /c start \"\" " + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI 4.0.2 installer for developers", "install on Windows.bat"));
+                }
+                default -> {
+                    return false;
+                }
+            }
         } catch (Exception e) {
             e.printStackTrace();
+            return false;
         }
+        return true;
+    }
+
+    public static boolean installContentPatcher() {
+        try {
+            if (Files.notExists(Paths.get(TranslationHelper.filepath, "contentPatcher.zip"))) {
+                URL url = new URL("https://www.curseforge.com/api/v1/mods/309243/files/5197203/download");
+                ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
+                FileOutputStream fileOutputStream = new FileOutputStream(Paths.get(TranslationHelper.filepath, "contentPatcher.zip").toString());
+                FileChannel fileChannel = fileOutputStream.getChannel();
+                fileChannel.transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+            }
+            if (Files.notExists(Paths.get(Paths.get(TranslationHelper.filepath, "Mods", "ContentPatcher").toString()))) {
+                unzip(Paths.get(TranslationHelper.filepath, "contentPatcher.zip").toString(), Paths.get(TranslationHelper.filepath, "Mods").toString());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+    public static boolean installXNBHack() {
+        try {
+            if (Files.notExists(Paths.get(TranslationHelper.filepath, "XNBHack.zip"))) {
+                URL url = switch (OsCheck.getOperatingSystemType()) {
+                    case MacOS -> new URL("https://github.com/Pathoschild/StardewXnbHack/releases/download/1.0.8/StardewXnbHack-1.0.8-for-macOS.zip");
+                    case Linux -> new URL("https://github.com/Pathoschild/StardewXnbHack/releases/download/1.0.8/StardewXnbHack-1.0.8-for-Linux.zip");
+                    case Windows -> new URL("https://github.com/Pathoschild/StardewXnbHack/releases/download/1.0.8/StardewXnbHack-1.0.8-for-Windows.zip");
+                    default -> null;
+                };
+                if (url == null) {
+                    return false;
+                }
+                ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
+                FileOutputStream fileOutputStream = new FileOutputStream(Paths.get(TranslationHelper.filepath, "XNBHack.zip").toString());
+                FileChannel fileChannel = fileOutputStream.getChannel();
+                fileChannel.transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+                unzip(Paths.get(TranslationHelper.filepath, "XNBHack.zip").toString(), Paths.get(TranslationHelper.filepath).toString());
+            }
+            switch (OsCheck.getOperatingSystemType()) {
+                case MacOS -> {
+                    if (Files.notExists(Paths.get(TranslationHelper.filepath, "StardewXnbHack.command"))) {
+                        File exe = new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack 1.0.8 for macOS","StardewXnbHack.command").toString());
+                        exe.renameTo(new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack.command").toString()));
+                    }
+                    Process runtimeProcess = Runtime.
+                            getRuntime().
+                            exec("/bin/sh -c \"\" " + Paths.get(TranslationHelper.filepath, "StardewXnbHack.command"));
+                    runtimeProcess.waitFor();
+                }
+                case Linux -> {
+                    if (Files.notExists(Paths.get(TranslationHelper.filepath, "StardewXnbHack.sh"))) {
+                        File exe = new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack 1.0.8 for Linux","StardewXnbHack.sh").toString());
+                        exe.renameTo(new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack.sh").toString()));
+                    }
+                    Process runtimeProcess = Runtime.
+                            getRuntime().
+                            exec("/bin/sh -c \"\" " + Paths.get(TranslationHelper.filepath, "StardewXnbHack.sh"));
+                    runtimeProcess.waitFor();
+                }
+                case Windows -> {
+                    if (Files.notExists(Paths.get(TranslationHelper.filepath, "StardewXnbHack.exe"))) {
+                        File exe = new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack 1.0.8 for Windows","StardewXnbHack.exe").toString());
+                        exe.renameTo(new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack.exe").toString()));
+                    }
+                    System.out.println("cmd /c " + Paths.get(TranslationHelper.filepath, "StardewXnbHack.exe"));
+                    Process runtimeProcess = Runtime.
+                            getRuntime().
+                            exec("cmd /c start .\\" + "StardewXnbHack.exe", null, new File(TranslationHelper.filepath));
+                    runtimeProcess.waitFor();
+                }
+                default -> {
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
     }
     public static void unzip(String fileZip, String targetDir) throws Exception {
         File destDir = new File(targetDir);
@@ -195,4 +381,46 @@ class CustomButton extends Button implements ActionListener {
         f.accept(e);
     }
 
+}
+
+/**
+ * helper class to check the operating system this Java VM runs in
+ *
+ * please keep the notes below as a pseudo-license
+ *
+ * <a href="http://stackoverflow.com/questions/228477/how-do-i-programmatically-determine-operating-system-in-java">...</a>
+ * compare to <a href="http://svn.terracotta.org/svn/tc/dso/tags/2.6.4/code/base/common/src/com/tc/util/runtime/Os.java">...</a>
+ * <a href="http://www.docjar.com/html/api/org/apache/commons/lang/SystemUtils.java.html">...</a>
+ */
+class OsCheck {
+    /**
+     * types of Operating Systems
+     */
+    public enum OSType {
+        Windows, MacOS, Linux, Other
+    };
+
+    // cached result of OS detection
+    protected static OSType detectedOS;
+
+    /**
+     * detect the operating system from the os.name System property and cache
+     * the result
+     * {@code @returns} - the operating system detected
+     */
+    public static OSType getOperatingSystemType() {
+        if (detectedOS == null) {
+            String OS = System.getProperty("os.name", "generic").toLowerCase(Locale.ENGLISH);
+            if ((OS.contains("mac")) || (OS.contains("darwin"))) {
+                detectedOS = OSType.MacOS;
+            } else if (OS.contains("win")) {
+                detectedOS = OSType.Windows;
+            } else if (OS.contains("nux")) {
+                detectedOS = OSType.Linux;
+            } else {
+                detectedOS = OSType.Other;
+            }
+        }
+        return detectedOS;
+    }
 }
