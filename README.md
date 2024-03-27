@@ -5,7 +5,7 @@ Stardew Valley Translation Helper is made to handle all of the difficult program
 
 ## Installation
 
-0. Ensure Java is installed on your machine
-1. Download the latest release and put it in a folder
+0. Ensure Java and Stardew Valley are installed on your machine
+1. Download the latest release and unzip it anywhere
 2. Run the program
 3. Translate!
