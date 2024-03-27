@@ -11,10 +11,14 @@ import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.Locale;
+import org.json.*;
+import java.util.List;
 
 public class TranslationHelper {
     private static MainFrame frame;
     public static String filepath;
+    public static String project;
+    public static String modId;
     private static TextField fileChooser;
     public static void main(String[] args) {
         frame = new MainFrame("Stardew Valley Translation Tool");
@@ -28,15 +32,20 @@ public class TranslationHelper {
     }
     static void begin() {
         BufferedReader reader;
+        String projects = "";
         try {
             reader = new BufferedReader(new FileReader("TranslationHelper.properties"));
             String line = reader.readLine();
 
-            String[] arr = line.split(":");
+            String[] arr = line.split(": ");
             filepath = arr[1];
             for (int i=2; i<arr.length; i++) {
-                filepath += ":" + arr[i];
+                filepath += ": " + arr[i];
             }
+
+            String[] projectsArr = reader.readLine().split(": ");
+            if (projectsArr.length > 1)
+                projects = projectsArr[1];
 
             reader.close();
         } catch (Exception e) {
@@ -46,8 +55,148 @@ public class TranslationHelper {
         }
         Label header = new Label("Install location located: " + filepath);
         frame.add(header);
+
+        String[] projectsArr = projects.split(",");
+        for (String s : projectsArr) {
+            if (!s.isEmpty()) {
+                CustomButton cb = new CustomButton(s, TranslationHelper::chooseProject);
+                cb.setActionCommand(s);
+                frame.add(cb);
+            }
+        }
+
+        CustomButton cb = new CustomButton("New Project", TranslationHelper::newProject);
+        frame.add(cb);
         frame.revalidate();
         frame.repaint();
+    }
+    static void chooseProject(ActionEvent e) {
+        project = e.getActionCommand();
+        frame.getContentPane().removeAll();
+        frame.add(new Label("Opening project " + project));
+        frame.revalidate();
+        frame.repaint();
+        beginProject();
+    }
+    static void beginProject() {
+        /* Assuming:
+        * SMAPI, Content Patcher, and XNB Hack are installed
+        * Mod folder is made
+        * content.json and manifest.json are initialized
+        * assets folder is made
+        * */
+
+    }
+    static void newProject(ActionEvent e) {
+        frame.getContentPane().removeAll();
+        frame.add(new TextField("LanguageName"));
+        frame.add(new TextField("YourNameNoSpaces"));
+        frame.add(new CustomButton("Create Project", TranslationHelper::createProject));
+        frame.revalidate();
+        frame.repaint();
+    }
+    static void createProject(ActionEvent e) {
+        project = ((TextField) frame.getContentPane().getComponent(0)).getText().replaceAll("\\s","");
+        String name = ((TextField) frame.getContentPane().getComponent(1)).getText().replaceAll("\\s","");
+
+        frame.getContentPane().removeAll();
+
+        modId = name + "." + project;
+
+        File modDir = new File(Paths.get(filepath, "Mods", project).toUri());
+        boolean made = modDir.mkdir();
+        if (!made) {
+            frame.add(new Label("Failed to create project. Please try running as administrator"));
+            frame.revalidate();
+            frame.repaint();
+            return;
+        }
+        try {
+            FileWriter manifest = new FileWriter(Paths.get(filepath, "Mods", project, "manifest.json").toFile());
+            manifest.write("{\n" +
+                    "\t\"Name\": \"" + project + "\",\n" +
+                    "\t\"Author\": \"" + name + "\",\n" +
+                    "\t\"Version\": \"0.0.1\",\n" +
+                    "\t\"Description\": \"Translates the base game to " + project + "\",\n" +
+                    "\t\"UniqueID\": \"" + modId + "\",\n" +
+                    "\t\"UpdateKeys\": [],\n" +
+                    "\t\"ContentPackFor\": {\n" +
+                    "\t\t\"UniqueID\": \"Pathoschild.ContentPatcher\"\n" +
+                    "\t}\n" +
+                    "}");
+            manifest.close();
+        } catch (Exception err) {
+
+        }
+
+        try {
+            FileWriter content = new FileWriter(Paths.get(filepath, "Mods", project, "content.json").toFile());
+
+            JSONObject contentJson = new JSONObject();
+            contentJson.put("Format","1.30.0");
+            JSONArray changes = new JSONArray();
+            contentJson.put("Changes",changes);
+
+            JSONObject base = new JSONObject();
+            base.put("Action","EditData");
+            base.put("Target","Data/AdditionalLanguages");
+            JSONObject entries = new JSONObject();
+            JSONObject mainEntry = new JSONObject();
+            mainEntry.put("ID",modId);
+            mainEntry.put("LanguageCode",project.substring(0,2).toLowerCase());//Should be changed later by user
+            mainEntry.put("ButtonTexture", "Mods/" + modId + "/Button");
+            mainEntry.put("UseLatinFont",true);
+            mainEntry.put("TimeFormat","[HOURS_24_00]:[MINUTES]");
+            mainEntry.put("ClockTimeFormat", "[HOURS_24_00]:[MINUTES]");
+            mainEntry.put("ClockDateFormat", "[DAY_OF_WEEK] [DAY_OF_MONTH]");
+            entries.put(modId, mainEntry);
+            base.put("Entries",entries);
+
+            changes.remove(0);
+            changes.put(base);
+
+            JSONObject languageButton = new JSONObject();
+            languageButton.put("Action","Load");
+            languageButton.put("Target","Mods/" + modId + "/Button");
+            languageButton.put("FromFile","assets/button.png");
+
+            changes.put(languageButton);
+
+            content.write(contentJson.toString());
+
+            content.close();
+        } catch (Exception err) {
+
+        }
+
+        File assetsDir = new File(Paths.get(filepath, "Mods", project, "assets").toUri());
+        boolean assetsDirMade = assetsDir.mkdir();
+        if (!assetsDirMade) {
+            frame.add(new Label("Failed to create assets folder. Please try running as administrator"));
+            frame.revalidate();
+            frame.repaint();
+            return;
+        }
+        File src = new File("button.png");
+        File target = new File(Paths.get(filepath, "Mods", project, "assets", "button.png").toUri());
+        try {
+            Files.copy(src.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception err) {}
+
+        try {
+            File file = new File("TranslationHelper.properties");
+            List<String> lines = Files.readAllLines(file.toPath());
+            if (lines.get(1).split(",").length > 1) {
+                lines.set(1, lines.get(1) + "," + project);
+            } else {
+                lines.set(1, lines.get(1) + " " + project);
+            }
+            Files.write(file.toPath(), lines);
+        } catch (Exception err) {
+            //Insufficient permissions
+        }
+
+        beginProject();
     }
     static void initFirstMenu() {
         Label header = new Label("Choose your Stardew Valley install location");
@@ -159,15 +308,16 @@ public class TranslationHelper {
             }
         }
         System.out.println("Finished XNB");
-        currentStep.setText("Basic Install complete");
+        frame.getContentPane().remove(currentStep);
         frame.add(new Label("Go to Steam -> Stardew Valley -> Properties -> Launch Options and set to "));
         String filetype = OsCheck.getOperatingSystemType() == OsCheck.OSType.Windows ? ".exe" : "";
-        frame.add(new Label(Paths.get(filepath,"StardewModdingAPI" + filetype) + " %command%"));
+        frame.add(new TextField(Paths.get(filepath,"StardewModdingAPI" + filetype) + " %command%"));
         frame.revalidate();
         frame.repaint();
         try {
             FileWriter config = new FileWriter("TranslationHelper.properties");
             config.append("location: ").append(TranslationHelper.filepath);
+            config.append("\nprojects: \n");
             config.close();
             begin();
         } catch (Exception err) {
