@@ -1,19 +1,21 @@
 import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.io.*;
 import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.*;
-import java.util.Objects;
+import java.util.*;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-import java.util.Locale;
+
 import org.json.*;
-import java.util.List;
 
 public class TranslationHelper {
     private static MainFrame frame;
@@ -179,8 +181,10 @@ public class TranslationHelper {
                 return;
             }
 
+            progressJSON.put("button.png","loaded");
+
             for (File f: Objects.requireNonNull(baseDir.listFiles())) {
-                if (f.isDirectory()) {
+                if (f.isDirectory() && !f.getName().equals("Fonts")) {
                     JSONObject progressBaseDir = new JSONObject();
                     progressJSON.put(f.getName(), progressBaseDir);
                     File comparableDir = new File(Paths.get(assetsDir.getAbsolutePath(),f.getName()).toUri());
@@ -192,37 +196,44 @@ public class TranslationHelper {
                             for (File doubleSub : Objects.requireNonNull(sub.listFiles())) {
                                 File deepDir = new File(Paths.get(assetsDir.getAbsolutePath(),f.getName(),sub.getName()).toUri());
                                 if (doubleSub.getName().contains("de-DE")) {
-                                    progressSubDir.put(doubleSub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + doubleSub.getName().split("\\.")[2],"loaded");
+                                    final String fileName = doubleSub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + doubleSub.getName().split("\\.")[2];
                                     //Requires translation
                                     if (!deepDir.exists()) {
                                         boolean success = deepDir.mkdirs();
                                     }
-                                    copyFile(doubleSub.getAbsolutePath().split("\\.")[0] + "." + doubleSub.getAbsolutePath().split("\\.")[2], Paths.get(deepDir.getAbsolutePath(),doubleSub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + doubleSub.getName().split("\\.")[2]).toString());
-                                    JSONObject change = new JSONObject();
-                                    change.put("Action", "Load");
-                                    change.put("Target",f.getName() + "/" + sub.getName() + "/" + doubleSub.getName().split("\\.")[0]);
-                                    change.put("FromFile","assets/" + f.getName() + "/" + sub.getName() + "/" + doubleSub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + doubleSub.getName().split("\\.")[2]);
-                                    JSONObject when = new JSONObject();
-                                    when.put("Language",languageCode);
-                                    change.put("when", when);
-                                    changes.put(change);
+                                    boolean alreadyThere = copyFileUnlessExists(doubleSub.getAbsolutePath().split("\\.")[0] + "." + doubleSub.getAbsolutePath().split("\\.")[2], Paths.get(deepDir.getAbsolutePath(),fileName).toString());
+
+                                    progressSubDir.put(fileName, alreadyThere ? "loaded" : "complete");
+                                    if (alreadyThere) {
+                                        JSONObject change = new JSONObject();
+                                        change.put("Action", "Load");
+                                        change.put("Target", f.getName() + "/" + sub.getName() + "/" + doubleSub.getName().split("\\.")[0]);
+                                        change.put("FromFile", "assets/" + f.getName() + "/" + sub.getName() + "/" + fileName);
+                                        JSONObject when = new JSONObject();
+                                        when.put("Language", languageCode);
+                                        change.put("when", when);
+                                        changes.put(change);
+                                    }
                                 }
                             }
                         } else if (sub.getName().contains("de-DE")) {
-                            progressBaseDir.put(sub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + sub.getName().split("\\.")[2],"loaded");
                             //Requires translation
+                            final String fileName = sub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + sub.getName().split("\\.")[2];
                             if (!comparableDir.exists()) {
                                 boolean success = comparableDir.mkdir();
                             }
-                            copyFile(sub.getAbsolutePath().split("\\.")[0] + "." + sub.getAbsolutePath().split("\\.")[2], Paths.get(comparableDir.getAbsolutePath(),sub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + sub.getName().split("\\.")[2]).toString());
-                            JSONObject change = new JSONObject();
-                            change.put("Action", "Load");
-                            change.put("Target",f.getName() + "/" + sub.getName().split("\\.")[0]);
-                            change.put("FromFile","assets/" + f.getName() + "/" + sub.getName().split("\\.")[0] + "." + LANGUAGE_CODE + "." + sub.getName().split("\\.")[2]);
-                            JSONObject when = new JSONObject();
-                            when.put("Language",languageCode);
-                            change.put("when", when);
-                            changes.put(change);
+                            boolean alreadyThere = copyFileUnlessExists(sub.getAbsolutePath().split("\\.")[0] + "." + sub.getAbsolutePath().split("\\.")[2], Paths.get(comparableDir.getAbsolutePath(),fileName).toString());
+                            progressBaseDir.put(fileName, alreadyThere ? "loaded" : "complete");
+                            if (alreadyThere) {
+                                JSONObject change = new JSONObject();
+                                change.put("Action", "Load");
+                                change.put("Target", f.getName() + "/" + sub.getName().split("\\.")[0]);
+                                change.put("FromFile", "assets/" + f.getName() + "/" + fileName);
+                                JSONObject when = new JSONObject();
+                                when.put("Language", languageCode);
+                                change.put("when", when);
+                                changes.put(change);
+                            }
                         }
                     }
                 }
@@ -234,10 +245,164 @@ public class TranslationHelper {
             frame.add(new Label("Files copied successfully"));
             frame.revalidate();
             frame.repaint();
+        } else {
+            frame.getContentPane().removeAll();
+            frame.add(new Label("Progress loaded successfully"));
+            frame.revalidate();
+            frame.repaint();
         }
 
         //JSON is now loaded. Name_progress.json is loaded. content.json is updated.
+        renderDir(Paths.get(MOD_PATH,"assets").toString(), progressJSON);
+    }
+    static void renderDir(String dirname, JSONObject progress) {
+        String png = ".png";
 
+        frame.getContentPane().removeAll();
+
+        GridLayout grid = new GridLayout(0,2);
+
+        if (dirname.split("assets").length > 1) {
+            //Subdir
+            CustomButton cb = new CustomButton("Back", (e) -> {
+                renderDir(e.getActionCommand(), progress);
+            });
+            cb.setActionCommand(Path.of(dirname).getParent().toString());
+            frame.add(cb);
+            frame.add(new Label(""));
+        }
+
+        frame.setLayout(grid);
+
+        File currentDir = new File(dirname);
+
+        for (File f: Objects.requireNonNull(currentDir.listFiles())) {
+            if (f.isDirectory()) {
+                CustomButton cb = new CustomButton(f.getName(), (e) -> {
+                    renderDir(e.getActionCommand(), progress);
+                });
+                cb.setActionCommand(f.getAbsolutePath());
+                frame.add(cb);
+                frame.add(new Label("View Directory"));
+            } else {
+                //File
+                String status = getProgressOf(f.getAbsolutePath(), progress);
+                if (f.getName().contains(png)) {
+                    frame.add(new Label(f.getName() + ": " + status));
+                    if (status.equals("loaded")) {
+                        CustomButton cb = new CustomButton("Mark Complete", (e) -> {
+                            setProgressOf(f.getAbsolutePath(),progress,"complete");
+                        });
+                        frame.add(cb);
+                    } else {
+                        frame.add(new Label(""));
+                    }
+                } else {
+                    CustomButton cb = new CustomButton(f.getName(), (e) -> {
+                        editfile(e.getActionCommand(), progress);
+                    });
+                    cb.setActionCommand(f.getAbsolutePath());
+                    frame.add(cb);
+                    frame.add(new Label(status));
+                }
+            }
+        }
+        frame.revalidate();
+        frame.repaint();
+    }
+    static void editfile(String filename, JSONObject progress) {
+        frame.getContentPane().removeAll();
+        frame.setLayout(new BorderLayout());
+
+        JPanel p = new JPanel();
+        p.setLayout(new GridLayout(0,2));
+
+        JScrollPane scrPane = new JScrollPane(p);
+        scrPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        scrPane.setPreferredSize(frame.getPreferredSize());
+        frame.add(scrPane);
+
+        JSONObject contents = new JSONObject(readFile(filename));
+
+        CustomButton cb = new CustomButton("Back", (e) -> {
+            saveFile(filename, contents);
+            renderDir(e.getActionCommand(), progress);
+        });
+        cb.setActionCommand(Path.of(filename).getParent().toString());
+        p.add(cb);
+        p.add(new CustomButton("Mark Complete", (e) -> {
+            setProgressOf(filename,progress,"complete");
+        }));
+
+        for (Iterator<String> it = contents.keys(); it.hasNext(); ) {
+            String k = it.next();
+            p.add(new Label(k));
+            JTextArea ta = new JTextArea(contents.getString(k));
+            ta.getDocument().addDocumentListener(new DocumentListener() {
+                @Override
+                public void insertUpdate(DocumentEvent e) {
+                    contents.put(k,ta.getText());
+                }
+
+                @Override
+                public void removeUpdate(DocumentEvent e) {
+                    contents.put(k,ta.getText());
+                }
+
+                @Override
+                public void changedUpdate(DocumentEvent e) {
+                    contents.put(k,ta.getText());
+                }
+            });
+            p.add(ta);
+        }
+
+        p.revalidate();
+        p.repaint();
+
+        frame.pack();
+        frame.revalidate();
+        frame.repaint();
+    }
+    static String getProgressOf(String absolutePath, JSONObject progress) {
+        File subdir = new File(absolutePath);
+
+        ArrayList<String> dirs = new ArrayList<>();
+
+        while (!subdir.getAbsolutePath().equals(Paths.get(filepath,"Mods", project, "assets").toString()) && subdir.getParentFile() != null) {
+            dirs.add(subdir.getName());
+            subdir = subdir.getParentFile();
+        }
+
+        if (subdir.getParent() == null) {
+            throw new RuntimeException("Error fetching progress of " + absolutePath);
+        }
+
+        for (int i = dirs.size() - 1; i > 0; i--) {
+            progress = progress.getJSONObject(dirs.get(i));
+        }
+
+        return progress.getString(dirs.get(0));
+    }
+    static void setProgressOf(String absolutePath, JSONObject progress, String progressOf) {
+        File subdir = new File(absolutePath);
+
+        ArrayList<String> dirs = new ArrayList<>();
+
+        while (!subdir.getAbsolutePath().equals(Paths.get(filepath,"Mods", project, "assets").toString()) && subdir.getParentFile() != null) {
+            dirs.add(subdir.getName());
+            subdir = subdir.getParentFile();
+        }
+
+        if (subdir.getParent() == null) {
+            throw new RuntimeException("Error fetching progress of " + absolutePath);
+        }
+
+        for (int i = dirs.size() - 1; i > 0; i--) {
+            progress = progress.getJSONObject(dirs.get(i));
+        }
+
+        progress.put(dirs.get(0), progressOf);
     }
     static void saveFile(String filename, JSONObject json) {
         try {
@@ -267,6 +432,19 @@ public class TranslationHelper {
         try {
             Files.copy(src.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception err) {}
+    }
+    static boolean copyFileUnlessExists(String source, String destination) {
+        File src = new File(source);
+        File target = new File(destination);
+        if (Files.exists(target.toPath())) {
+            return false;
+        }
+        try {
+            Files.copy(src.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception err) {
+            return false;
+        }
+        return true;
     }
     static void newProject(ActionEvent e) {
         frame.getContentPane().removeAll();
@@ -679,7 +857,7 @@ class MainFrame extends JFrame implements WindowListener {
         setLayout(new FlowLayout());
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         getContentPane().add(new Label(), BorderLayout.CENTER);
-        setPreferredSize(new Dimension(800, 300));
+        setPreferredSize(new Dimension(800, 600));
         pack();
         addWindowListener(this);
 
@@ -690,11 +868,11 @@ class MainFrame extends JFrame implements WindowListener {
         dispose();
     }
 
-    public void windowOpened(WindowEvent e) {}
-    public void windowActivated(WindowEvent e) {}
-    public void windowIconified(WindowEvent e) {}
-    public void windowDeiconified(WindowEvent e) {}
-    public void windowDeactivated(WindowEvent e) {}
+    public void windowOpened(WindowEvent e) {this.revalidate();this.repaint();}
+    public void windowActivated(WindowEvent e) {this.revalidate();this.repaint();}
+    public void windowIconified(WindowEvent e) {this.revalidate();this.repaint();}
+    public void windowDeiconified(WindowEvent e) {this.revalidate();this.repaint();}
+    public void windowDeactivated(WindowEvent e) {this.revalidate();this.repaint();}
     public void windowClosed(WindowEvent e) {}
 
 }
