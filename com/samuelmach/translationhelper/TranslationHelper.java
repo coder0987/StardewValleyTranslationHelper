@@ -813,7 +813,6 @@ public class TranslationHelper {
             //Insufficient permissions
         }
     }
-
 }
 
 class Installer {
@@ -836,17 +835,25 @@ class Installer {
                 case MacOS -> {
                     Runtime.
                             getRuntime().
-                            exec("/bin/sh -c \"\" " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "install on macOS.command") + Q);
+                            exec("/bin/sh -c \"\" " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "install on macOS.command") + Q)
+                            .waitFor();
                 }
                 case Linux -> {
+                    //Fix permission bugs on Linux
+                    ProcessBuilder pb_chmod = new ProcessBuilder("/bin/sh", "-c", "chmod +xrw -R " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "internal") + Q);
+                    Process runtimeProcess_pb_chmod = pb_chmod.start();
+                    runtimeProcess_pb_chmod.waitFor();
+
                     Runtime.
                             getRuntime().
-                            exec("/bin/sh -c \"\" " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "install on Linux.sh") + Q);
+                            exec("/bin/sh -c \"\" " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "install on Linux.sh") + Q)
+                            .waitFor();
                 }
                 case Windows -> {
                     Runtime.
                             getRuntime().
-                            exec("cmd /c start \"\" " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "install on Windows.bat") + Q);
+                            exec("cmd /c start \"\" " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "install on Windows.bat") + Q)
+                            .waitFor();
                 }
                 default -> {
                     return false;
