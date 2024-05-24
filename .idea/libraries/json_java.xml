@@ -2,6 +2,7 @@
   <library name="json-java">
     <CLASSES>
       <root url="jar://$PROJECT_DIR$/json-java.jar!/" />
+      <root url="jar://$PROJECT_DIR$/flatlaf-3.4.1.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />

@@ -17,6 +17,7 @@ import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.json.*;
+import com.formdev.flatlaf.*;
 
 import static com.samuelmach.translationhelper.TranslationHelper.Q;
 
@@ -30,6 +31,12 @@ public class TranslationHelper {
     public static final char Q = '\"';
 
     public static void main(String[] args) {
+        try {
+            UIManager.setLookAndFeel( new FlatLightLaf() );
+        } catch( Exception ex ) {
+            System.err.println( "Failed to initialize LaF" );
+        }
+
         frame = new MainFrame("Stardew Valley Translation Tool");
 
         if (Files.exists(Path.of("TranslationHelper.properties"))) {

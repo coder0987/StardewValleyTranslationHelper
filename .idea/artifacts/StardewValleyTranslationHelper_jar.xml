@@ -4,6 +4,7 @@
     <root id="archive" name="StardewValleyTranslationHelper.jar">
       <element id="module-output" name="StardewValleyTranslationHelper" />
       <element id="extracted-dir" path="$PROJECT_DIR$/json-java.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/flatlaf-3.4.1.jar" path-in-jar="/" />
     </root>
   </artifact>
 </component>
