@@ -338,7 +338,7 @@ public class TranslationHelper {
                 //File
                 String status = getProgressOf(f.getAbsolutePath(), progress);
                 if (f.getName().contains(png)) {
-                    p.add(new Label(f.getName() + ": " + status));
+                    p.add(new Label(f.getName() + ": " + status), c);
                     c.gridx = 1;
                     if (status.equals("loaded")) {
                         CustomButton cb = new CustomButton("Mark Complete", (e) -> {
@@ -348,8 +348,6 @@ public class TranslationHelper {
                     } else {
                         p.add(new Label(""),c);
                     }
-                    c.gridx = 0;
-                    c.gridy++;
                 } else {
                     CustomButton cb = new CustomButton(f.getName(), (e) -> {
                         editfile(e.getActionCommand(), progress);
@@ -358,9 +356,9 @@ public class TranslationHelper {
                     p.add(cb,c);
                     c.gridx = 1;
                     p.add(new Label(status),c);
-                    c.gridx = 0;
-                    c.gridy++;
                 }
+                c.gridx = 0;
+                c.gridy++;
             }
         }
         scrPane.revalidate();
@@ -372,14 +370,22 @@ public class TranslationHelper {
     static void editfile(String filename, JSONObject progress) {
         frame.getContentPane().removeAll();
         frame.setLayout(new BorderLayout());
+        GridBagLayout grid = new GridBagLayout();
+        GridBagConstraints c = new GridBagConstraints();
 
-        JPanel p = new JPanel();
-        p.setLayout(new GridLayout(0,2));
+        c.fill = GridBagConstraints.BOTH;
+        c.gridwidth = 1;
+        c.gridx = 0;
+        c.gridy = 0;
+        c.weightx = 0.5;
+        c.weighty = 0.5;
+
+        JPanel p = new JPanel(grid);
 
         JScrollPane scrPane = new JScrollPane(p);
         scrPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         scrPane.setPreferredSize(frame.getPreferredSize());
-        frame.add(scrPane);
+        frame.add(scrPane, BorderLayout.CENTER);
 
         JSONObject contents;
         try {
@@ -400,14 +406,18 @@ public class TranslationHelper {
             renderDir(e.getActionCommand(), progress);
         });
         cb.setActionCommand(Path.of(filename).getParent().toString());
-        p.add(cb);
+        p.add(cb, c);
+        c.gridx = 1;
         p.add(new CustomButton("Mark Complete", (e) -> {
             setProgressOf(filename,progress,"complete");
-        }));
+        }), c);
+        c.gridx = 0;
+        c.gridy++;
 
         for (Iterator<String> it = contents.keys(); it.hasNext(); ) {
             String k = it.next();
-            p.add(new Label(k));
+            p.add(new Label(k), c);
+            c.gridx = 1;
             JTextArea ta = new JTextArea(contents.getString(k));
             ta.getDocument().addDocumentListener(new DocumentListener() {
                 @Override
@@ -425,11 +435,13 @@ public class TranslationHelper {
                     contents.put(k,ta.getText());
                 }
             });
-            p.add(ta);
+            p.add(ta, c);
+            c.gridx = 0;
+            c.gridy++;
         }
 
-        p.revalidate();
-        p.repaint();
+        scrPane.revalidate();
+        scrPane.repaint();
 
         frame.pack();
         frame.revalidate();
