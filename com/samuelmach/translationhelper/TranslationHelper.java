@@ -18,6 +18,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.json.*;
 
+import static com.samuelmach.translationhelper.TranslationHelper.Q;
+
 public class TranslationHelper {
     private static MainFrame frame;
     public static String filepath;
@@ -25,6 +27,8 @@ public class TranslationHelper {
     public static String modId;
     public static String languageCode;
     private static TextField fileChooser;
+    public static final char Q = '\"';
+
     public static void main(String[] args) {
         frame = new MainFrame("Stardew Valley Translation Tool");
 
@@ -170,19 +174,31 @@ public class TranslationHelper {
         JSONObject contentJSON = new JSONObject(readFile(contentPath));
         JSONArray changes = contentJSON.getJSONArray("Changes");
 
+        Path assetsPath = Paths.get(MOD_PATH, "assets");
         if (progress.isEmpty()) {
+            System.out.println("Copying JSON files...");
             //Load all JSON files from Stardew Valley into the mod
             File baseDir = new File(Paths.get(filepath,"Content (unpacked)").toUri());
-            File assetsDir = new File(Paths.get(MOD_PATH,"assets").toUri());
-            //go through each sub directory and find all files that have translations
+            File assetsDir = new File(assetsPath.toUri());
+            //go through each subdirectory and find all files that have translations
             //For each file with a translation, create a copy of it in assets and add it to content.json
 
             if (baseDir.listFiles() == null) {
                 System.out.println(baseDir.getAbsolutePath());
+                frame.getContentPane().removeAll();
+                frame.add(new Label("There was an error loading the Content Files from " + Paths.get(filepath,"Content (unpacked)")));
+                frame.revalidate();
+                frame.repaint();
                 return;
             }
 
             progressJSON.put("button.png","loaded");
+
+            int numPeriodsInPath = MOD_PATH.split("\\.").length - 1;
+            String correctedPath = "";
+            for (int i=0; i<numPeriodsInPath; i++) {
+                correctedPath += MOD_PATH.split("\\.")[i] + ".";
+            }
 
             for (File f: Objects.requireNonNull(baseDir.listFiles())) {
                 if (f.isDirectory() && !f.getName().equals("Fonts")) {
@@ -202,7 +218,7 @@ public class TranslationHelper {
                                     if (!deepDir.exists()) {
                                         boolean success = deepDir.mkdirs();
                                     }
-                                    boolean alreadyThere = copyFileUnlessExists(doubleSub.getAbsolutePath().split("\\.")[0] + "." + doubleSub.getAbsolutePath().split("\\.")[2], Paths.get(deepDir.getAbsolutePath(),fileName).toString());
+                                    boolean alreadyThere = copyFileUnlessExists(correctedPath + doubleSub.getAbsolutePath().split("\\.")[numPeriodsInPath] + "." + doubleSub.getAbsolutePath().split("\\.")[numPeriodsInPath + 2], Paths.get(deepDir.getAbsolutePath(),fileName).toString());
 
                                     progressSubDir.put(fileName, alreadyThere ? "loaded" : "complete");
                                     if (alreadyThere) {
@@ -223,7 +239,7 @@ public class TranslationHelper {
                             if (!comparableDir.exists()) {
                                 boolean success = comparableDir.mkdir();
                             }
-                            boolean alreadyThere = copyFileUnlessExists(sub.getAbsolutePath().split("\\.")[0] + "." + sub.getAbsolutePath().split("\\.")[2], Paths.get(comparableDir.getAbsolutePath(),fileName).toString());
+                            boolean alreadyThere = copyFileUnlessExists(correctedPath + sub.getAbsolutePath().split("\\.")[numPeriodsInPath] + "." + sub.getAbsolutePath().split("\\.")[numPeriodsInPath + 2], Paths.get(comparableDir.getAbsolutePath(),fileName).toString());
                             progressBaseDir.put(fileName, alreadyThere ? "loaded" : "complete");
                             if (alreadyThere) {
                                 JSONObject change = new JSONObject();
@@ -244,17 +260,17 @@ public class TranslationHelper {
 
             frame.getContentPane().removeAll();
             frame.add(new Label("Files copied successfully"));
-            frame.revalidate();
-            frame.repaint();
+            System.out.println("Copied files!");
         } else {
+            System.out.println("Loading progress...");
             frame.getContentPane().removeAll();
             frame.add(new Label("Progress loaded successfully"));
-            frame.revalidate();
-            frame.repaint();
         }
+        frame.revalidate();
+        frame.repaint();
 
         //JSON is now loaded. Name_progress.json is loaded. content.json is updated.
-        renderDir(Paths.get(MOD_PATH,"assets").toString(), progressJSON);
+        renderDir(assetsPath.toString(), progressJSON);
     }
     static void renderDir(String dirname, JSONObject progress) {
         String png = ".png";
@@ -323,8 +339,20 @@ public class TranslationHelper {
         scrPane.setPreferredSize(frame.getPreferredSize());
         frame.add(scrPane);
 
-        JSONObject contents = new JSONObject(readFile(filename));
-
+        JSONObject contents;
+        try {
+            contents = new JSONObject(readFile(filename));
+        } catch (org.json.JSONException e) {
+            frame.getContentPane().removeAll();
+            frame.add(new Label("Oops! There was an error parsing this JSON"));
+            CustomButton cb = new CustomButton("Back", (eb) -> {
+                renderDir(eb.getActionCommand(), progress);
+            });
+            cb.setActionCommand(Path.of(filename).getParent().toString());
+            frame.revalidate();
+            frame.repaint();
+            return;
+        }
         CustomButton cb = new CustomButton("Back", (e) -> {
             saveFile(filename, contents);
             renderDir(e.getActionCommand(), progress);
@@ -443,6 +471,7 @@ public class TranslationHelper {
         try {
             Files.copy(src.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception err) {
+            System.out.println(err);
             return false;
         }
         return true;
@@ -571,6 +600,9 @@ public class TranslationHelper {
             //Insufficient permissions
         }
 
+        frame.revalidate();
+        frame.repaint();
+
         beginProject();
     }
     static void initFirstMenu() {
@@ -579,10 +611,10 @@ public class TranslationHelper {
 
         switch (OsCheck.getOperatingSystemType()) {
             case MacOS -> {
-                fileChooser = new TextField("/Users/[username]/Library/Application Support/Steam/steamapps/Stardew Valley");
+                fileChooser = new TextField(System.getProperty("user.home") + "/Library/Application Support/Steam/steamapps/Stardew Valley");
             }
             case Linux -> {
-                fileChooser = new TextField("/home/[username]/.local/share/Steam/steamapps/Stardew Valley");
+                fileChooser = new TextField(System.getProperty("user.home") + "/.local/share/Steam/steamapps/common/Stardew Valley");
             }
             default -> {
                 fileChooser = new TextField("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Stardew Valley");
@@ -623,7 +655,12 @@ public class TranslationHelper {
         frame.repaint();
 
         //Check for Stardew Valley
-        if (Files.notExists(Paths.get(filepath, "Stardew Valley.exe"))) {
+        boolean stardewValleyInstalled = switch (OsCheck.getOperatingSystemType()) {
+            case Windows -> Files.notExists(Paths.get(filepath, "Stardew Valley.exe"));
+            case MacOS, Other, Linux -> Files.notExists(Paths.get(filepath, "Stardew Valley"));
+        };
+
+        if (stardewValleyInstalled) {
             frame.getContentPane().removeAll();
             frame.add(new Label("Stardew Valley is not installed in the chosen directory. Please install Stardew Valley."));
             frame.add(new CustomButton("Close",(ae) -> System.exit(0)));
@@ -635,13 +672,30 @@ public class TranslationHelper {
         frame.revalidate();
         frame.repaint();
         System.out.println("Install SMAPI");
-        if (Files.notExists(Paths.get(filepath, "StardewModdingAPI.exe"))) {
+
+        boolean smapiInstalled = switch (OsCheck.getOperatingSystemType()) {
+            case Windows -> Files.notExists(Paths.get(filepath, "StardewModdingAPI.exe"));
+            case MacOS, Other, Linux -> Files.notExists(Paths.get(filepath, "StardewModdingAPI"));
+        };
+
+        if (smapiInstalled) {
             currentStep.setText("SMAPI is not installed in the chosen directory. Installing...");
             frame.revalidate();
             frame.repaint();
-            if (!Installer.installSMAPI()) {
+            if (!Installer.installSMAPI() || switch (OsCheck.getOperatingSystemType()) {
+                case Windows -> Files.notExists(Paths.get(filepath, "StardewModdingAPI.exe"));
+                case MacOS, Other, Linux -> Files.notExists(Paths.get(filepath, "StardewModdingAPI"));
+            }) {
                 frame.getContentPane().removeAll();
                 frame.add(new Label("Failed to install SMAPI."));
+                frame.add(new Label("You may have to run the install script manually:"));
+                frame.add(new Label("1. In Steam -> Stardew Valley -> Settings -> Manage -> Browse Local Files"));
+                frame.add(new Label("2. Find smapi_install -> SMAPI [Version] installer for developers"));
+                frame.add(new Label("3. If you are on Linux, change the file permissions from Terminal:"));
+                frame.add(new Label("sudo +xrw -R internal"));
+                frame.add(new Label("4. Run the install script for your OS and follow the on screen instructions"));
+                frame.add(new Label("5. Close and rerun StardewValleyTranslationHelper"));
+                //chmod +xrw -R internal
                 frame.add(new CustomButton("Close",(ae) -> System.exit(0)));
                 frame.revalidate();
                 frame.repaint();
@@ -673,9 +727,15 @@ public class TranslationHelper {
             currentStep.setText("Stardew XNB Hack is not installed in the chosen directory. Installing...");
             frame.revalidate();
             frame.repaint();
-            if (!Installer.installXNBHack()) {
+            if (!Installer.installXNBHack() || Files.notExists(Paths.get(TranslationHelper.filepath, "Content (unpacked)"))) {
                 frame.getContentPane().removeAll();
                 frame.add(new Label("Failed to install Stardew XNB Hack."));
+                frame.add(new Label("Try manually running the script by following these instructions:"));
+                frame.add(new Label("1. In Steam -> Stardew Valley -> Settings -> Manage -> Browse Local Files"));
+                frame.add(new Label("2. Find and run StardewXnbHack" + (OsCheck.getOperatingSystemType() == OsCheck.OSType.Windows ? ".exe" : "")));
+                frame.add(new Label("(If it doesn't run, try running in cmd/terminal using ./StardewXnbHack" + (OsCheck.getOperatingSystemType() == OsCheck.OSType.Windows ? ".exe" : "") + ")"));
+                frame.add(new Label("3. Follow the on-screen instructions"));
+                frame.add(new Label("4. Close and rerun StardewValleyTranslationHelper"));
                 frame.add(new CustomButton("Close",(ae) -> System.exit(0)));
                 frame.revalidate();
                 frame.repaint();
@@ -699,17 +759,21 @@ public class TranslationHelper {
             //Insufficient permissions
         }
     }
+
 }
 
 class Installer {
     public static boolean installSMAPI() {
+        final String version = "4.0.8";
         try {
             if (Files.notExists(Paths.get(TranslationHelper.filepath, "SMAPI.zip"))) {
-                URL url = new URL("https://github.com/Pathoschild/SMAPI/releases/download/4.0.2/SMAPI-4.0.2-installer-for-developers.zip");
+                URL url = new URL("https://github.com/Pathoschild/SMAPI/releases/download/" + version + "/SMAPI-" + version + "-installer-for-developers.zip");
                 ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
                 FileOutputStream fileOutputStream = new FileOutputStream(Paths.get(TranslationHelper.filepath, "SMAPI.zip").toString());
                 FileChannel fileChannel = fileOutputStream.getChannel();
                 fileChannel.transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+                fileOutputStream.close();
+
             }
             if (Files.notExists(Paths.get(TranslationHelper.filepath, "smapi_install"))) {
                 unzip(Paths.get(TranslationHelper.filepath, "SMAPI.zip").toString(), Paths.get(TranslationHelper.filepath, "smapi_install").toString());
@@ -718,17 +782,17 @@ class Installer {
                 case MacOS -> {
                     Runtime.
                             getRuntime().
-                            exec("/bin/sh -c \"\" " + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI 4.0.2 installer for developers", "install on macOS.command"));
+                            exec("/bin/sh -c \"\" " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "install on macOS.command") + Q);
                 }
                 case Linux -> {
                     Runtime.
                             getRuntime().
-                            exec("/bin/sh -c \"\" " + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI 4.0.2 installer for developers", "install on Linux.sh"));
+                            exec("/bin/sh -c \"\" " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "install on Linux.sh") + Q);
                 }
                 case Windows -> {
                     Runtime.
                             getRuntime().
-                            exec("cmd /c start \"\" " + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI 4.0.2 installer for developers", "install on Windows.bat"));
+                            exec("cmd /c start \"\" " + Q + Paths.get(TranslationHelper.filepath, "smapi_install", "SMAPI " + version + " installer for developers", "install on Windows.bat") + Q);
                 }
                 default -> {
                     return false;
@@ -749,6 +813,7 @@ class Installer {
                 FileOutputStream fileOutputStream = new FileOutputStream(Paths.get(TranslationHelper.filepath, "contentPatcher.zip").toString());
                 FileChannel fileChannel = fileOutputStream.getChannel();
                 fileChannel.transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+                fileOutputStream.close();
             }
             if (Files.notExists(Paths.get(Paths.get(TranslationHelper.filepath, "Mods", "ContentPatcher").toString()))) {
                 unzip(Paths.get(TranslationHelper.filepath, "contentPatcher.zip").toString(), Paths.get(TranslationHelper.filepath, "Mods").toString());
@@ -760,12 +825,13 @@ class Installer {
         return true;
     }
     public static boolean installXNBHack() {
+        final String version = "1.1.0";
         try {
             if (Files.notExists(Paths.get(TranslationHelper.filepath, "XNBHack.zip"))) {
                 URL url = switch (OsCheck.getOperatingSystemType()) {
-                    case MacOS -> new URL("https://github.com/Pathoschild/StardewXnbHack/releases/download/1.0.8/StardewXnbHack-1.0.8-for-macOS.zip");
-                    case Linux -> new URL("https://github.com/Pathoschild/StardewXnbHack/releases/download/1.0.8/StardewXnbHack-1.0.8-for-Linux.zip");
-                    case Windows -> new URL("https://github.com/Pathoschild/StardewXnbHack/releases/download/1.0.8/StardewXnbHack-1.0.8-for-Windows.zip");
+                    case MacOS -> new URL("https://github.com/Pathoschild/StardewXnbHack/releases/download/" + version + "/StardewXnbHack-" + version + "-for-macOS.zip");
+                    case Linux -> new URL("https://github.com/Pathoschild/StardewXnbHack/releases/download/" + version + "/StardewXnbHack-" + version + "-for-Linux.zip");
+                    case Windows -> new URL("https://github.com/Pathoschild/StardewXnbHack/releases/download/" + version + "/StardewXnbHack-" + version + "-for-Windows.zip");
                     default -> null;
                 };
                 if (url == null) {
@@ -776,37 +842,41 @@ class Installer {
                 FileChannel fileChannel = fileOutputStream.getChannel();
                 fileChannel.transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
                 unzip(Paths.get(TranslationHelper.filepath, "XNBHack.zip").toString(), Paths.get(TranslationHelper.filepath).toString());
+                fileOutputStream.close();
             }
             switch (OsCheck.getOperatingSystemType()) {
                 case MacOS -> {
                     if (Files.notExists(Paths.get(TranslationHelper.filepath, "StardewXnbHack.command"))) {
-                        File exe = new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack 1.0.8 for macOS","StardewXnbHack.command").toString());
+                        File exe = new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack " + version + " for macOS","StardewXnbHack.command").toString());
                         exe.renameTo(new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack.command").toString()));
                     }
-                    Process runtimeProcess = Runtime.
-                            getRuntime().
-                            exec("/bin/sh -c \"\" " + Paths.get(TranslationHelper.filepath, "StardewXnbHack.command"));
+                    ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", "\"\"", String.valueOf(Paths.get(TranslationHelper.filepath, "StardewXnbHack.command")));
+                    Process runtimeProcess = pb.start();
                     runtimeProcess.waitFor();
                 }
                 case Linux -> {
-                    if (Files.notExists(Paths.get(TranslationHelper.filepath, "StardewXnbHack.sh"))) {
-                        File exe = new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack 1.0.8 for Linux","StardewXnbHack.sh").toString());
-                        exe.renameTo(new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack.sh").toString()));
+                    if (Files.notExists(Paths.get(TranslationHelper.filepath, "StardewXnbHack"))) {
+                        File exe = new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack " + version + " for Linux","StardewXnbHack").toString());
+                        exe.renameTo(new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack").toString()));
                     }
-                    Process runtimeProcess = Runtime.
-                            getRuntime().
-                            exec("/bin/sh -c \"\" " + Paths.get(TranslationHelper.filepath, "StardewXnbHack.sh"));
+                    ProcessBuilder pb_chmod = new ProcessBuilder("/bin/sh", "-c", "chmod +x " + Q + Paths.get(TranslationHelper.filepath, "StardewXnbHack") + Q);
+                    Process runtimeProcess_pb_chmod = pb_chmod.start();
+                    runtimeProcess_pb_chmod.waitFor();
+
+                    ProcessBuilder pb = new ProcessBuilder(String.valueOf(Paths.get(TranslationHelper.filepath, "StardewXnbHack")));
+                    pb.directory(new File(TranslationHelper.filepath));
+                    Process runtimeProcess = pb.start();
+
                     runtimeProcess.waitFor();
                 }
                 case Windows -> {
                     if (Files.notExists(Paths.get(TranslationHelper.filepath, "StardewXnbHack.exe"))) {
-                        File exe = new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack 1.0.8 for Windows","StardewXnbHack.exe").toString());
+                        File exe = new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack " + version + " for Windows","StardewXnbHack.exe").toString());
                         exe.renameTo(new File(Paths.get(TranslationHelper.filepath, "StardewXnbHack.exe").toString()));
                     }
                     System.out.println("cmd /c " + Paths.get(TranslationHelper.filepath, "StardewXnbHack.exe"));
-                    Process runtimeProcess = Runtime.
-                            getRuntime().
-                            exec("cmd /c start .\\" + "StardewXnbHack.exe", null, new File(TranslationHelper.filepath));
+                    ProcessBuilder pb = new ProcessBuilder("cmd", "/c", "start", ".\\", String.valueOf(Paths.get(TranslationHelper.filepath, "StardewXnbHack.exe")));
+                    Process runtimeProcess = pb.start();
                     runtimeProcess.waitFor();
                 }
                 default -> {
@@ -910,9 +980,7 @@ class CustomButton extends Button implements ActionListener {
 
 /**
  * helper class to check the operating system this Java VM runs in
- *
  * please keep the notes below as a pseudo-license
- *
  * <a href="http://stackoverflow.com/questions/228477/how-do-i-programmatically-determine-operating-system-in-java">...</a>
  * compare to <a href="http://svn.terracotta.org/svn/tc/dso/tags/2.6.4/code/base/common/src/com/tc/util/runtime/Os.java">...</a>
  * <a href="http://www.docjar.com/html/api/org/apache/commons/lang/SystemUtils.java.html">...</a>
