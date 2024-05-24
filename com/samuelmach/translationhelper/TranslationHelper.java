@@ -46,7 +46,7 @@ public class TranslationHelper {
         }
 
     }
-    static void begin() {
+    public static void begin() {
         BufferedReader reader;
         String projects = "";
         try {
@@ -94,10 +94,16 @@ public class TranslationHelper {
         frame.repaint();
 
         if (Files.notExists(Paths.get(TranslationHelper.filepath, "Mods", project))) {
-            frame.add(new Label("Project " + project + " does not exist!"));
-            frame.revalidate();
-            frame.repaint();
-            return;
+            if (!project.equals(project.trim())) {
+                project = project.trim();
+            } else {
+                frame.add(new Label("Project " + project + " does not exist!"));
+                CustomButton cb = new CustomButton("Back to Project List", (ActionEvent ae) -> begin());
+                frame.add(cb);
+                frame.revalidate();
+                frame.repaint();
+                return;
+            }
         }
 
         beginProject();
@@ -283,8 +289,24 @@ public class TranslationHelper {
         String png = ".png";
 
         frame.getContentPane().removeAll();
+        frame.setLayout(new BorderLayout());
+        GridBagLayout grid = new GridBagLayout();
+        GridBagConstraints c = new GridBagConstraints();
 
-        GridLayout grid = new GridLayout(0,2);
+        c.fill = GridBagConstraints.BOTH;
+        c.gridwidth = 1;
+        c.gridx = 0;
+        c.gridy = 0;
+        c.weightx = 0.5;
+        c.weighty = 0.5;
+
+        JPanel p = new JPanel(grid);
+
+        JScrollPane scrPane = new JScrollPane(p);
+        scrPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        scrPane.setPreferredSize(frame.getPreferredSize());
+        frame.add(scrPane, BorderLayout.CENTER);
+
 
         if (dirname.split("assets").length > 1) {
             //Subdir
@@ -292,11 +314,12 @@ public class TranslationHelper {
                 renderDir(e.getActionCommand(), progress);
             });
             cb.setActionCommand(Path.of(dirname).getParent().toString());
-            frame.add(cb);
-            frame.add(new Label(""));
+            p.add(cb,c);
+            c.gridx = 1;
+            p.add(new Label(""),c);
+            c.gridx = 0;
+            c.gridy++;
         }
-
-        frame.setLayout(grid);
 
         File currentDir = new File(dirname);
 
@@ -306,32 +329,44 @@ public class TranslationHelper {
                     renderDir(e.getActionCommand(), progress);
                 });
                 cb.setActionCommand(f.getAbsolutePath());
-                frame.add(cb);
-                frame.add(new Label("View Directory"));
+                p.add(cb,c);
+                c.gridx = 1;
+                p.add(new Label("View Directory"),c);
+                c.gridx = 0;
+                c.gridy++;
             } else {
                 //File
                 String status = getProgressOf(f.getAbsolutePath(), progress);
                 if (f.getName().contains(png)) {
-                    frame.add(new Label(f.getName() + ": " + status));
+                    p.add(new Label(f.getName() + ": " + status));
+                    c.gridx = 1;
                     if (status.equals("loaded")) {
                         CustomButton cb = new CustomButton("Mark Complete", (e) -> {
                             setProgressOf(f.getAbsolutePath(),progress,"complete");
                         });
-                        frame.add(cb);
+                        p.add(cb,c);
                     } else {
-                        frame.add(new Label(""));
+                        p.add(new Label(""),c);
                     }
+                    c.gridx = 0;
+                    c.gridy++;
                 } else {
                     CustomButton cb = new CustomButton(f.getName(), (e) -> {
                         editfile(e.getActionCommand(), progress);
                     });
                     cb.setActionCommand(f.getAbsolutePath());
-                    frame.add(cb);
-                    frame.add(new Label(status));
+                    p.add(cb,c);
+                    c.gridx = 1;
+                    p.add(new Label(status),c);
+                    c.gridx = 0;
+                    c.gridy++;
                 }
             }
         }
+        scrPane.revalidate();
+        scrPane.repaint();
         frame.revalidate();
+        frame.pack();
         frame.repaint();
     }
     static void editfile(String filename, JSONObject progress) {
